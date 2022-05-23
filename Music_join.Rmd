@@ -1,0 +1,55 @@
+---
+title: "Join"
+author: "Alejandro Muñoz"
+date: "8/5/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(tidyr)
+library(naniar) #Exploration of NAs
+library(dplyr) #data manipulation
+library(ggplot2)#ploting
+library(ggpubr)#combine plots
+```
+
+
+# Music analisiys 
+
+On this notebbok we will try to bind two data frames into one to make music analisys. 
+First we will try a join by column, but we expect problems with this because the name of the song may not be writen in the exact same way. 
+
+To fix this we will try an aproximation using hashes and similarty measurments.
+
+
+Read files:
+
+```{r}
+rolling_stones <- read.csv('./Data/top500songsrollingstones.csv')
+spotify <- read.csv("./Data/data_spotify_1921_2020.csv")
+
+typeof(rolling_stones$Song[1]) 
+
+typeof(spotify$name[1])
+
+```
+
+## First aproch: simple join
+```{r}
+rolling_stones$name <- rolling_stones$Song
+
+try_1 <- merge(x=rolling_stones,y=spotify,by="name",all.x=FALSE, all.y=FALSE)
+n_distinct(try_1$name)
+```
+By doing this simple merge we find only 411 matches out of 500. And we enconuter a problem, there are many repetitions of the songs, aparently on the data base of spotify there are many cases in which for one specific song there are many versions of that same song. 
+
+We will deal with the repetitions later, but first lets try to get 500 matches out of 500 by using hashes. 
+
+
+
+

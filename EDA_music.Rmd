@@ -1,0 +1,58 @@
+---
+title: "EDA"
+author: "Alejandro Muñoz"
+date: "29/4/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# EDA of Spotify and Rolling-Stones data
+
+## Objective:
+Our objective is not to make predictions of any kind, we just want to understand how great songs and music are made and what they have in common. 
+
+```{r}
+library(ggplot2)
+library(tidyr)
+library(naniar) #Exploration of NAs
+library(dplyr) #data manipulation
+library(PerformanceAnalytics)#visualization of correlations
+library(ggplot2)#ploting
+library(ggpubr)#combine plots
+```
+
+Read files:
+
+```{r}
+rolling_stones <- read.csv('./Data/top500songsrollingstones.csv')
+spotify <- read.csv("./Data/data_spotify_1921_2020.csv")
+
+```
+
+There is not much to explore in the data "500 Greatest Songs of All Time Rolling Stones". It is just a list of the songs and the authors. 
+So, we will focus on the spotify data or the EDA.
+
+First we will take a look at the distributions of songs over the years. 
+```{r}
+ggplot(spotify, aes(year)) + geom_histogram(bins = 100, color="darkblue", fill="lightblue" ) +
+  ggtitle("Number of songs by year")
+
+```
+
+Now we will try to find correlations between variables and also seeing their distribution in the same plot by using the library *PerformanceAnalytics*.
+
+
+```{r}
+#first we take out all the variables that are not numeric
+# and select the most relevant variables 
+corr <- select(spotify, acousticness, danceability, energy, instrumentalness, popularity, valence, year)#selecciono solo variables numericas para generar plot
+chart.Correlation(corr, histogram = TRUE, method = "pearson")
+mtext("Spotify Data", side = 3, line = 1)
+```
+
+
+
+
