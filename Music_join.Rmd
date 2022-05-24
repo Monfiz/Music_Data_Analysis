@@ -16,6 +16,8 @@ library(naniar) #Exploration of NAs
 library(dplyr) #data manipulation
 library(ggplot2)#ploting
 library(ggpubr)#combine plots
+library(stringr)#manipulate strings
+library(tidyverse)
 ```
 
 
@@ -30,23 +32,148 @@ To fix this we will try an aproximation using hashes and similarty measurments.
 Read files:
 
 ```{r}
-rolling_stones <- read.csv('./Data/top500songsrollingstones.csv')
+rolling_stones <- read.csv('./Data/Top_500_songs.csv')
 spotify <- read.csv("./Data/data_spotify_1921_2020.csv")
 
-typeof(rolling_stones$Song[1]) 
+
+rolling_stones$ID <- 1:nrow(rolling_stones)
+spotify$ID <- 1:nrow(spotify)
+
+typeof(rolling_stones$title[1]) 
 
 typeof(spotify$name[1])
 
 ```
 
+```{r}
+#we create new columns to make the join by using hashes 
+
+rolling_stones <- rolling_stones |> mutate(texto = paste(title, artist,   sep = "    "))
+
+rolling_stones <- rolling_stones |> mutate(texto_2 = paste(title, artist, str_sub(released, start= -4) , sep = "    ")) |>
+                  mutate(texto_2 = str_to_lower(texto_2)) |> 
+                  mutate(texto_2 = str_remove_all(texto_2, pattern = "[^a-z -]")) |>
+                  mutate(texto_2 = paste(texto_2, str_sub(released, start= -4) , sep = "    "))
+
+spotify <- spotify |> mutate(texto = paste(name, artists, sep = "    ") )
+
+spotify <- spotify |> mutate(texto_2 = paste(name, artists, sep = "    ") ) |>
+                  mutate(texto_2 = str_to_lower(texto_2)) |> 
+                  mutate(texto_2 = str_remove_all(texto_2, pattern = "[^a-z -]")) |>
+                  mutate(texto_2 = paste(texto_2, year , sep = "    "))
+
+
+# function to create hashes
+calcular_tejas <- function(x, k = 4, lowercase = FALSE){
+  tokenizers::tokenize_character_shingles(x, n = k, lowercase = lowercase,
+    simplify = TRUE, strip_non_alpha = FALSE)
+}
+
+generar_hash <- function(){
+  r <- as.integer(stats::runif(1, 1, 2147483647))
+  funcion_hash <- function(tejas){
+        digest::digest2int(tejas, seed = r) 
+  }
+  funcion_hash
+}
+
+#tejas de texto 1
+rolling_stones <- rolling_stones |> 
+  mutate(tejas = map(texto, ~ calcular_tejas(.x, k = 5)))
+spotify <- spotify |> 
+  mutate(tejas = map(texto, ~ calcular_tejas(.x, k = 5)))
+
+#tejas texto_2
+rolling_stones <- rolling_stones |> 
+  mutate(tejas_2 = map(texto_2, ~ calcular_tejas(.x, k = 5)))
+spotify <- spotify |> 
+  mutate(tejas_2 = map(texto_2, ~ calcular_tejas(.x, k = 5)))
+
+```
+
+
+```{r}
+set.seed(88345)
+# crear hashes
+hashes <- map(1:3, ~ generar_hash())
+
+construir_firmas <- function(hashes, tejas){
+  tibble(hash_num = 1:length(hashes), 
+         firma = map_int(hashes, \(h) min(h(tejas)))
+  )
+}
+
+rolling_stones_hashes <- rolling_stones |> 
+  mutate(firma = map(tejas, ~ construir_firmas(hashes, .x))) |> 
+  select(ID, firma) |> 
+  unnest(firma) |> 
+  mutate(cubeta = paste(hash_num, firma, sep = "-")) |> 
+  select(ID, cubeta)
+
+rolling_stones_hashes_2 <- rolling_stones |> 
+  mutate(firma = map(tejas_2, ~ construir_firmas(hashes, .x))) |> 
+  select(ID, firma) |> 
+  unnest(firma) |> 
+  mutate(cubeta = paste(hash_num, firma, sep = "-")) |> 
+  select(ID, cubeta)
+
+spotify_hashes <- rolling_stones |> 
+  mutate(firma = map(tejas, ~ construir_firmas(hashes, .x))) |> 
+  select(ID, firma) |> 
+  unnest(firma) |> 
+  mutate(cubeta = paste(hash_num, firma, sep = "-")) |> 
+  select(ID, cubeta)
+
+spotify_hashes_2 <- rolling_stones |> 
+  mutate(firma = map(tejas_2, ~ construir_firmas(hashes, .x))) |> 
+  select(ID, firma) |> 
+  unnest(firma) |> 
+  mutate(cubeta = paste(hash_num, firma, sep = "-")) |> 
+  select(ID, cubeta)
+
+```
+
+Make join by hashes
+
+```{r}
+candidatos_tbl <- inner_join(rolling_stones_hashes |> rename(id_rolling = ID), 
+                          spotify_hashes |> rename(id_spoty = ID))
+candidatos_tbl
+```
+
+```{r}
+sim_jaccard <- \(a, b)  length(intersect(a, b)) / length(union(a, b)) 
+
+candidatos_score_tbl <- candidatos_tbl |> 
+  left_join(rolling_stones |>
+              select(id_rolling = ID, tejas_rolling = tejas)) |> 
+  left_join(spotify |> 
+              select(id_spoty = ID, tejas_spoty = tejas)) |> 
+  mutate(score = map2_dbl(tejas_rolling, tejas_spoty, ~ sim_jaccard(.x, .y))) |> 
+  select(-tejas_rolling, -tejas_spoty, -cubeta)
+
+candidatos_score_tbl <- candidatos_score_tbl |> 
+  unique()
+
+candidatos_score_tbl
+
+```
+```{r}
+candidatos_score_tbl |> summarise(media_score = mean(score))
+candidatos_score_tbl |> ggplot(aes(sample = score)) + geom_qq(distribution = stats::qunif)
+```
+
+
+
 ## First aproch: simple join
 ```{r}
-rolling_stones$name <- rolling_stones$Song
+rolling_stones$name <- rolling_stones$title
 
 try_1 <- merge(x=rolling_stones,y=spotify,by="name",all.x=FALSE, all.y=FALSE)
+nrow(try_1)
 n_distinct(try_1$name)
 ```
-By doing this simple merge we find only 411 matches out of 500. And we enconuter a problem, there are many repetitions of the songs, aparently on the data base of spotify there are many cases in which for one specific song there are many versions of that same song. 
+By doing this simple merge we find only 327 matches out of 500. And we enconuter a problem, there are many repetitions of the songs, aparently on the data base of spotify there are many cases in which for one specific song there are many versions of that same song. 
 
 We will deal with the repetitions later, but first lets try to get 500 matches out of 500 by using hashes. 
 
