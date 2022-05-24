@@ -32,37 +32,38 @@ To fix this we will try an aproximation using hashes and similarty measurments.
 Read files:
 
 ```{r}
+### Read data
 rolling_stones <- read.csv('./Data/Top_500_songs.csv')
 spotify <- read.csv("./Data/data_spotify_1921_2020.csv")
 
-
+### Add index to reference later
 rolling_stones$ID <- 1:nrow(rolling_stones)
 spotify$ID <- 1:nrow(spotify)
 
-typeof(rolling_stones$title[1]) 
-
-typeof(spotify$name[1])
-
+#
 ```
+
+
 
 ```{r}
 #we create new columns to make the join by using hashes 
 
-rolling_stones <- rolling_stones |> mutate(texto = paste(title, artist,   sep = "    "))
+rolling_stones <- rolling_stones |>
+                  mutate(texto = paste(title, artist, str_sub(released, start= -4) , sep = "    ")) |>
+                  mutate(texto = str_to_lower(texto)) |> 
+                  mutate(texto = str_remove_all(texto, pattern = "[^a-z -]")) |>
+                  mutate(texto = paste(texto, str_sub(released, start= -4) , sep = "    "))
 
-rolling_stones <- rolling_stones |> mutate(texto_2 = paste(title, artist, str_sub(released, start= -4) , sep = "    ")) |>
-                  mutate(texto_2 = str_to_lower(texto_2)) |> 
-                  mutate(texto_2 = str_remove_all(texto_2, pattern = "[^a-z -]")) |>
-                  mutate(texto_2 = paste(texto_2, str_sub(released, start= -4) , sep = "    "))
-
-spotify <- spotify |> mutate(texto = paste(name, artists, sep = "    ") )
-
-spotify <- spotify |> mutate(texto_2 = paste(name, artists, sep = "    ") ) |>
-                  mutate(texto_2 = str_to_lower(texto_2)) |> 
-                  mutate(texto_2 = str_remove_all(texto_2, pattern = "[^a-z -]")) |>
-                  mutate(texto_2 = paste(texto_2, year , sep = "    "))
+spotify <- spotify |> 
+                  mutate(texto = paste(name, artists, sep = "    ") ) |>
+                  mutate(texto = str_to_lower(texto)) |> 
+                  mutate(texto = str_remove_all(texto, pattern = "[^a-z -]")) |>
+                  mutate(texto = paste(texto, year , sep = "    "))
+```
 
 
+
+```{r}
 # function to create hashes
 calcular_tejas <- function(x, k = 4, lowercase = FALSE){
   tokenizers::tokenize_character_shingles(x, n = k, lowercase = lowercase,
@@ -76,20 +77,17 @@ generar_hash <- function(){
   }
   funcion_hash
 }
-
-#tejas de texto 1
-rolling_stones <- rolling_stones |> 
-  mutate(tejas = map(texto, ~ calcular_tejas(.x, k = 5)))
-spotify <- spotify |> 
-  mutate(tejas = map(texto, ~ calcular_tejas(.x, k = 5)))
-
-#tejas texto_2
-rolling_stones <- rolling_stones |> 
-  mutate(tejas_2 = map(texto_2, ~ calcular_tejas(.x, k = 5)))
-spotify <- spotify |> 
-  mutate(tejas_2 = map(texto_2, ~ calcular_tejas(.x, k = 5)))
-
 ```
+
+
+
+```{r}
+rolling_stones <- rolling_stones |> 
+  mutate(tejas = map(texto, ~ calcular_tejas(.x, k = 5)))
+spotify <- spotify |> 
+  mutate(tejas = map(texto, ~ calcular_tejas(.x, k = 5)))
+```
+
 
 
 ```{r}
@@ -110,57 +108,122 @@ rolling_stones_hashes <- rolling_stones |>
   mutate(cubeta = paste(hash_num, firma, sep = "-")) |> 
   select(ID, cubeta)
 
-rolling_stones_hashes_2 <- rolling_stones |> 
-  mutate(firma = map(tejas_2, ~ construir_firmas(hashes, .x))) |> 
-  select(ID, firma) |> 
-  unnest(firma) |> 
-  mutate(cubeta = paste(hash_num, firma, sep = "-")) |> 
-  select(ID, cubeta)
-
-spotify_hashes <- rolling_stones |> 
+spotify_hashes <- spotify |> 
   mutate(firma = map(tejas, ~ construir_firmas(hashes, .x))) |> 
   select(ID, firma) |> 
   unnest(firma) |> 
   mutate(cubeta = paste(hash_num, firma, sep = "-")) |> 
   select(ID, cubeta)
-
-spotify_hashes_2 <- rolling_stones |> 
-  mutate(firma = map(tejas_2, ~ construir_firmas(hashes, .x))) |> 
-  select(ID, firma) |> 
-  unnest(firma) |> 
-  mutate(cubeta = paste(hash_num, firma, sep = "-")) |> 
-  select(ID, cubeta)
-
 ```
 
 Make join by hashes
 
 ```{r}
-candidatos_tbl <- inner_join(rolling_stones_hashes |> rename(id_rolling = ID), 
-                          spotify_hashes |> rename(id_spoty = ID))
-candidatos_tbl
+candidatos_tbl <- inner_join(rolling_stones_hashes |> rename(id_rolling_stones = ID), 
+                          spotify_hashes |> rename(id_spotify = ID))
+candidatos_tbl |> head(10)
 ```
+
+
 
 ```{r}
 sim_jaccard <- \(a, b)  length(intersect(a, b)) / length(union(a, b)) 
 
 candidatos_score_tbl <- candidatos_tbl |> 
   left_join(rolling_stones |>
-              select(id_rolling = ID, tejas_rolling = tejas)) |> 
+              select(id_rolling_stones = ID, tejas_rolling_stones = tejas)) |> 
   left_join(spotify |> 
-              select(id_spoty = ID, tejas_spoty = tejas)) |> 
-  mutate(score = map2_dbl(tejas_rolling, tejas_spoty, ~ sim_jaccard(.x, .y))) |> 
-  select(-tejas_rolling, -tejas_spoty, -cubeta)
+              select(id_spotify = ID, tejas_spotify = tejas)) |> 
+  mutate(score = map2_dbl(tejas_rolling_stones, tejas_spotify, ~ sim_jaccard(.x, .y))) |> 
+  select(-tejas_rolling_stones, -tejas_spotify, -cubeta)
 
 candidatos_score_tbl <- candidatos_score_tbl |> 
   unique()
 
 candidatos_score_tbl
-
 ```
+
+
+
 ```{r}
 candidatos_score_tbl |> summarise(media_score = mean(score))
 candidatos_score_tbl |> ggplot(aes(sample = score)) + geom_qq(distribution = stats::qunif)
+```
+
+
+
+```{r}
+nrow(candidatos_score_tbl)
+```
+
+
+
+```{r}
+candidatos_score_tbl |> arrange(desc(score))
+```
+
+
+
+```{r}
+id_rolling_stones <- "264"
+id_spotify <- "83172"
+filter(rolling_stones, ID == id_rolling_stones) |> select(c(artist, title))
+filter(spotify, ID == id_spotify) |> select(c(artists, name))
+```
+
+
+```{r}
+candidatos_filt
+```
+
+```{r}
+candidatos_filt <- candidatos_score_tbl %>% filter(score > .6)
+
+rolling_stones_filt <- rolling_stones %>%
+  mutate(id_rolling_stones = ID) %>%
+  mutate(title_rs = title) %>%
+  mutate(artist_rs = artist) %>%
+  select(c(id_rolling_stones, title_rs, artist_rs))
+
+spotify_filt <- spotify %>%
+  mutate(id_spotify = ID) %>%
+  mutate(title_sp = name) %>%
+  mutate(artist_sp = artists) %>%
+  select(c(id_spotify, title_sp, artist_sp))
+
+w <- merge(x = candidatos_filt, y = rolling_stones_filt, by = "id_rolling_stones")
+w <- merge(x = w, y = spotify_filt, by = "id_spotify")
+w <- w %>% select(-c( id_rolling_stones,id_spotify ))
+```
+
+```{r}
+### By artist
+w |> 
+  select(score, title_rs, title_sp, artist_rs, artist_sp) |>
+  arrange(artist_rs, title_rs)
+```
+
+
+```{r}
+### By score
+w |> 
+  select(score, title_rs, title_sp, artist_rs, artist_sp) |>
+  arrange(desc(score))
+```
+
+```{r}
+candidatos_filt <- filter(candidatos_score_tbl, score > 0.6)
+candidatos_filt |> arrange(desc(score))
+```
+
+```{r}
+map_df(candidatos_filt |> pull(id_rolling_stones), ~ filter(rolling_stones, ID == .x) |> pull(title))
+
+
+candidatos_filt |>
+  mutate(name_rs = rolling_stones |> 
+           filter(ID == id_rolling_stones) |>
+           pull(title))
 ```
 
 
