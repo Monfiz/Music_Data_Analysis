@@ -18,6 +18,9 @@ library(ggplot2)#ploting
 library(ggpubr)#combine plots
 library(stringr)#manipulate strings
 library(tidyverse)
+library(reticulate)
+
+`%!in%` <- Negate(`%in%`)
 ```
 
 
@@ -35,12 +38,87 @@ Read files:
 ### Read data
 rolling_stones <- read.csv('./Data/Top_500_songs.csv')
 spotify <- read.csv("./Data/data_spotify_1921_2020.csv")
+```
+
+```{r}
+### There are a lot of rows in the spotify dataset, we
+### want to reduce it in order to make computations easier
+nrow(rolling_stones)
+nrow(spotify)
+```
+
+```{r}
+### Remove everythging before 1947 and after 2008
+rolling_stones <- rolling_stones |> 
+  mutate(year = released |> str_sub(-4) |> as.integer()) |>
+  filter(year > 1947)
+spotify <- spotify |> 
+  filter(year > 1947)
+spotify <- spotify |> 
+  filter(year < 2009)
+
+### Remove those with strange characters
+spotify <- spotify |>
+  mutate(texto = paste(name, artists, sep = "    ")) |>
+  mutate(texto = str_to_lower(texto)) |> 
+  mutate(texto = str_remove_all(texto, pattern = "[^a-z -]")) |>
+  filter(nchar(texto) > 10)
+```
+
+```{r}
+words_to_remove <- c(
+                     'Sonata', 'Danse', 'Remasterizado', 'Chapter',
+                     'Nocturne', 'Prelude', 'Menuetto','Scherzando',
+                     'Concerto',  'Instrumental', 'Quartet', 'Chorale',
+                     'Mono', 'Concerto in', 'Bolero, No. 2',
+                     'Fugue', 'Chanson', 'Corrido',
+
+                     'Act I', 'Act II', 'Act III', 'Act IV',
+
+                     'Op. 1', 'Op. 2', 'Op. 3', 'Op. 4',
+                     'Op. 5', 'Op. 6', 'Op. 7', 'Op. 8',
+                     'Op. 9', 'Op. 10', 'Op. 11', 'Op. 12',
+
+                     'A Major', 'B Major', 'C Major', 'D Major',
+                     'E Major', 'F Major', 'G Major',
+                     'A Minor', 'B Minor', 'C Minor', 'D Minor',
+                     'E Minor', 'F Minor', 'G Minor',
+
+                     'No. 1', 'No. 2', 'No. 3', 'No. 4',
+                     'No. 5', 'No. 6', 'No. 7', 'No. 8'
+                     )
+
+
+### Check if we are not removing something that does
+### appear in the Rolling Stones dataset
+rolling_stones_aux <- data.frame(rolling_stones)
+
+
+for (word in words_to_remove){
+  rolling_stones_aux <- rolling_stones_aux |> 
+                  filter(!grepl(toupper(word), toupper(title)))
+}
+
+print(nrow(rolling_stones_aux) == nrow(rolling_stones))
+
+### Remove the appearances of titles that contain these words
+spotify_aux <- data.frame(spotify)
+
+for (word in words_to_remove){
+  spotify_aux <- spotify_aux |> 
+                  filter(!grepl(toupper(word), toupper(name)))
+}
+```
+
+```{r}
+### Reassign to the spotify dataset
+spotify <- data.frame(spotify_aux)
 
 ### Add index to reference later
 rolling_stones$ID <- 1:nrow(rolling_stones)
 spotify$ID <- 1:nrow(spotify)
 
-#
+nrow(spotify)
 ```
 
 
@@ -83,9 +161,9 @@ generar_hash <- function(){
 
 ```{r}
 rolling_stones <- rolling_stones |> 
-  mutate(tejas = map(texto, ~ calcular_tejas(.x, k = 5)))
+  mutate(tejas = map(texto, ~ calcular_tejas(.x, k = 6)))
 spotify <- spotify |> 
-  mutate(tejas = map(texto, ~ calcular_tejas(.x, k = 5)))
+  mutate(tejas = map(texto, ~ calcular_tejas(.x, k = 6)))
 ```
 
 
@@ -93,7 +171,7 @@ spotify <- spotify |>
 ```{r}
 set.seed(88345)
 # crear hashes
-hashes <- map(1:3, ~ generar_hash())
+hashes <- map(1:6, ~ generar_hash())
 
 construir_firmas <- function(hashes, tejas){
   tibble(hash_num = 1:length(hashes), 
@@ -121,6 +199,7 @@ Make join by hashes
 ```{r}
 candidatos_tbl <- inner_join(rolling_stones_hashes |> rename(id_rolling_stones = ID), 
                           spotify_hashes |> rename(id_spotify = ID))
+nrow(candidatos_tbl)
 candidatos_tbl |> head(10)
 ```
 
@@ -165,19 +244,16 @@ candidatos_score_tbl |> arrange(desc(score))
 
 
 ```{r}
-id_rolling_stones <- "264"
-id_spotify <- "83172"
+id_rolling_stones <- "158"
+id_spotify <- "64896"
 filter(rolling_stones, ID == id_rolling_stones) |> select(c(artist, title))
 filter(spotify, ID == id_spotify) |> select(c(artists, name))
 ```
 
 
-```{r}
-candidatos_filt
-```
 
 ```{r}
-candidatos_filt <- candidatos_score_tbl %>% filter(score > .6)
+candidatos_filt <- candidatos_score_tbl %>% filter(score > .3)
 
 rolling_stones_filt <- rolling_stones %>%
   mutate(id_rolling_stones = ID) %>%
@@ -193,8 +269,11 @@ spotify_filt <- spotify %>%
 
 w <- merge(x = candidatos_filt, y = rolling_stones_filt, by = "id_rolling_stones")
 w <- merge(x = w, y = spotify_filt, by = "id_spotify")
-w <- w %>% select(-c( id_rolling_stones,id_spotify ))
+w <- w %>% select(-c( id_rolling_stones ))
+w <- w |> select('id_spotify',	'score',	'title_rs', 'title_sp', 'artist_rs', 'artist_sp'	)
 ```
+
+
 
 ```{r}
 ### By artist
@@ -210,22 +289,104 @@ w |>
   select(score, title_rs, title_sp, artist_rs, artist_sp) |>
   arrange(desc(score))
 ```
+We write it to a csv to work with it in python beacuse it is easier.
 
 ```{r}
-candidatos_filt <- filter(candidatos_score_tbl, score > 0.6)
-candidatos_filt |> arrange(desc(score))
+write.csv(w, "./Data/top_500_matchs.csv")
+```
+
+Working on clean_top_500_matches.ipynb ...
+
+Having worked in python, we read the new file.
+
+```{r}
+clean_top_500 <- read.csv("./Data/clean_top_500.csv")
 ```
 
 ```{r}
-map_df(candidatos_filt |> pull(id_rolling_stones), ~ filter(rolling_stones, ID == .x) |> pull(title))
-
-
-candidatos_filt |>
-  mutate(name_rs = rolling_stones |> 
-           filter(ID == id_rolling_stones) |>
-           pull(title))
+### Auxiliar code used to correct False Positives manually
+#
+# clean_top_500 |>
+#   filter(id_spotify == 22203)
+# 
+# spotify |>
+#   filter(grepl(toupper("Mississippi"), toupper(name)))  |>
+#   select(c(ID, artists, name))
+# 
+# spotify |> 
+#   filter(grepl(toupper("Beck"), toupper(artists))) |>
+#   select(c(ID, artists, name))
 ```
 
+We manually built a txt file containing all of the detected False Positives.
+
+Note that there were some titles in the Rolling Stones dataset that
+did not mactch with anything in the Spotify one.
+
+```{r}
+top_500_fp <- read.table("top_500_false_positives.txt", header=T)
+top_500_fp <- top_500_fp |> drop_na()
+top_500_fp
+```
+
+For every False Positive, we correct its true ID in Spotify:
+
+```{r}
+for(k in 1:nrow(top_500_fp)){
+  
+  new_aux <- spotify |> filter(ID == top_500_fp$true[k])
+  new_artist <- new_aux |> pull(artists)
+  new_title <- new_aux |> pull(name)
+  
+  clean_top_500["title_sp"][clean_top_500["id_spotify"] == top_500_fp$obs[k]] <- new_title
+  clean_top_500["artist_sp"][clean_top_500["id_spotify"] == top_500_fp$obs[k]] <- new_artist
+  clean_top_500["id_spotify"][clean_top_500["id_spotify"] == top_500_fp$obs[k]] <- top_500_fp$true[k]
+  
+}
+```
+
+Now we join this with the Spotify columns.
+
+```{r}
+rolling_stones_df <- clean_top_500 |> 
+  select(id_spotify) |>
+  left_join(spotify |> mutate(id_spotify = ID)) |>
+  select(-c(tejas, texto, ID, id)) |>
+  select(c("id_spotify", "artists", "name", "release_date", "year",
+           "acousticness", "danceability", "speechiness", "tempo", 
+           "valence", "energy", "instrumentalness", "liveness", 
+           "loudness", "duration_ms", "popularity",
+           "key", "mode", "explicit")) |>
+  mutate(top_500 = T)
+
+rolling_stones_df |> head()
+```
+
+Finally, we get a random sample of around 2500 songs from the Spotify dataset,
+different to the ones in the final Rolling Stones df.
+
+```{r}
+set.seed(88345)
+
+spotify_df <- spotify |> 
+  subset(ID %!in% (rolling_stones_df |> pull(id_spotify))) |>
+  sample_n(2500) |>
+  select(-c(tejas, texto, id)) |>
+  rename(id_spotify = ID) |>
+  select(c("id_spotify", "artists", "name", "release_date", "year",
+           "acousticness", "danceability", "speechiness", "tempo", 
+           "valence", "energy", "instrumentalness", "liveness", 
+           "loudness", "duration_ms", "popularity",
+           "key", "mode", "explicit")) |>
+  mutate(top_500 = F)
+
+spotify_df |> head()
+```
+
+```{r}
+final_df <- rbind(rolling_stones_df, spotify_df)
+write.csv(final_df, "./Data/spotify_analysis.csv")
+```
 
 
 ## First aproch: simple join
@@ -235,6 +396,8 @@ rolling_stones$name <- rolling_stones$title
 try_1 <- merge(x=rolling_stones,y=spotify,by="name",all.x=FALSE, all.y=FALSE)
 nrow(try_1)
 n_distinct(try_1$name)
+
+try_1 |> select(name, title, artist, artists)
 ```
 By doing this simple merge we find only 327 matches out of 500. And we enconuter a problem, there are many repetitions of the songs, aparently on the data base of spotify there are many cases in which for one specific song there are many versions of that same song. 
 
