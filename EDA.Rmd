@@ -1,0 +1,30 @@
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(purrr)
+library(patchwork)
+```
+
+
+
+```{r}
+data <- read_csv("./Data/spotify_analysis.csv")
+```
+
+```{r}
+g1<- ggplot(data=data, aes(x=acousticness, colour=top_500 , fill=top_500 )) + geom_density(alpha=0.25) + ggtitle("Densidad de Acousticness")
+g2<- ggplot(data=data, aes(x=danceability, colour=top_500, fill=top_500)) + geom_density(alpha=0.25) + ggtitle("Densidad de Danceability")
+g3<- ggplot(data=data, aes(x=log(speechiness+1), colour=top_500, fill=top_500)) + geom_density(alpha=0.25) + ggtitle("Densidad de log-Speechiness")
+g4<- ggplot(data=data, aes(x=tempo, colour=top_500, fill=top_500)) + geom_density(alpha=0.25) + ggtitle("Densidad de Tempo")
+g5<- ggplot(data=data, aes(x=valence, colour=top_500, fill=top_500)) + geom_density(alpha=0.25) + ggtitle("Densidad de Valence")
+g6<- ggplot(data=data, aes(x=energy, colour=top_500, fill=top_500)) + geom_density(alpha=0.25) + ggtitle("Densidad de Energy")
+g7<- ggplot(data=data %>% filter(instrumentalness<0.00001), aes(x=log(instrumentalness+1), colour=top_500, fill=top_500)) + geom_density(alpha=0.25) + ggtitle("Densidad de log-Instrumentalness")
+g8<- ggplot(data=data, aes(x=liveness, colour=top_500, fill=top_500)) + geom_density(alpha=0.25) + ggtitle("Densidad de Liveness")
+g9<- ggplot(data=data, aes(x=loudness, colour=top_500, fill=top_500)) + geom_density(alpha=0.25) + ggtitle("Densidad de Loudness")
+g10<- ggplot(data=data, aes(x=duration_ms, colour=top_500, fill=top_500)) + geom_density(alpha=0.25) + ggtitle("Densidad de Duration")
+
+
+g1+g2+g3+g4+g5+g6+g7+g8+g9+g10
+
+```
+
