@@ -1,0 +1,327 @@
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggrepel)
+library(tidyverse)
+library(skimr)
+library("devtools")
+library("factoextra")
+```
+
+
+```{r}
+data <- read_csv("./Data/spotify_analysis.csv")
+data2<-data
+```
+
+```{r}
+#Leemos los datos
+head(data)
+```
+```{r}
+names(data)
+```
+
+```{r}
+#Analisis de los datos que tenemos
+skimr::skim(data)
+```
+
+```{r}
+music <- data[,c(7:16)]
+```
+
+
+```{r}
+music.pca <-prcomp(music, scale=TRUE)
+summary(music.pca)
+```
+
+
+Vemos que la primer componente explica el 28.63% de la varianza, la segunda el 14.77% y la tercer el 11.88%. En total, las tres primeras componentes explican el   55.28% de la varianza. Podemos ver gráficamente el porcentaje de varianza explicada:
+```{r}
+fviz_eig(music.pca)
+```
+```{r}
+set.seed(145804)
+data2<-data %>% filter(top_500==TRUE)
+data2 %>% sample()
+```
+
+```{r}
+#Para saber cuáles componentes
+round(music.pca$rotation[, 1:2], 2)
+```
+
+
+```{r}
+scores_w <- music.pca$x|> as_tibble()
+scores_w$name<- data$name
+scores_w$id_spotify <- data$id_spotify
+scores_w$top_500 <- data$top_500
+scores_w
+```
+
+
+
+
+```{r}
+ggplot(scores_w, aes(x=PC1, y= -PC2, label=name, colour=top_500)) + 
+  geom_vline(xintercept=0, colour = 'red') +
+  geom_hline(yintercept=0, colour = 'red') +
+  geom_point()+
+  geom_text_repel(size=2.5, segment.alpha = 0.3, force = 0.1, seed=202) +
+  xlab('acousticness & instrumentalness vs. energy & loudness') +
+  ylab('duration_ms & liveness vs. danceability & valence')
+```
+
+```{r}
+summary(data$year)
+```
+
+```{r}
+scores_w <- music.pca$x|> as_tibble()
+scores_w$name<- data$name
+scores_w$id_spotify <- data$id_spotify
+scores_w$year <- data$year
+scores_w
+```
+```{r}
+ggplot(scores_w, aes(x=PC1, y= PC2, label=name, colour=year)) + 
+  geom_vline(xintercept=0, colour = 'blue') +
+  geom_hline(yintercept=0, colour = 'blue') +
+  geom_point()+
+  geom_text_repel(size=2.5, segment.alpha = 0.3, force = 0.1, seed=202) +
+  xlab('acousticness & instrumentalness vs. energy & loudness') +
+  ylab('duration_ms & liveness vs. danceability & valence')
+```
+```{r}
+data$year %>% quantile(c(.25,.5,.75))
+#1948-65
+#65-75
+#75-85
+#85-95
+#95-2008
+
+data_range <- data2%>%                        # Aggregate values in range
+  mutate(ranges = cut(year,
+                      seq(1948, 2008, 10))) 
+data_range                                         
+```
+
+```{r}
+music_l1t<-data_range %>% filter(ranges==levels(data_range$ranges)[1])
+music_l1<- data_range %>% filter(ranges==levels(data_range$ranges)[1])
+music_l1 <- music_l1[,c(7:16)]
+music.pcal1 <-prcomp(music_l1, scale=TRUE)
+```
+
+
+```{r}
+fviz_eig(music.pcal1)
+```
+
+
+```{r}
+#Para saber cuáles componentes
+round(music.pcal1$rotation[, 1:2], 2)
+```
+
+
+```{r}
+scores_l1<- music.pcal1$x|> as_tibble()
+scores_l1$name<- music_l1t$name
+scores_l1$top_500<- music_l1t$top_500
+scores_l1
+```
+
+
+
+
+```{r}
+#FALTA CAMBIAR LOS EJES!!!!
+ggplot(scores_l1, aes(x=PC1, y= PC2, label=name, colour=top_500)) + 
+  geom_vline(xintercept=0, colour = 'red') +
+  geom_hline(yintercept=0, colour = 'red') +
+  geom_point()+
+  geom_text_repel(size=2.5, segment.alpha = 0.3, force = 0.1, seed=202) +
+  xlab('acousticness & instrumentalness vs. energy & loudness') +
+  ylab('duration_ms & liveness vs. danceability & valence')
+```
+
+
+```{r}
+music_l2t<-data_range %>% filter(ranges==levels(data_range$ranges)[2])
+music_l2<- data_range %>% filter(ranges==levels(data_range$ranges)[2])
+music_l2 <- music_l2[,c(7:16)]
+music.pcal2 <-prcomp(music_l2, scale=TRUE)
+```
+
+
+```{r}
+fviz_eig(music.pcal2)
+```
+
+
+```{r}
+#Para saber cuáles componentes
+round(music.pcal2$rotation[, 1:2], 2)
+```
+
+
+```{r}
+set.seed(145804)
+scores_l2<- music.pcal2$x|> as_tibble()
+scores_l2$name<- music_l2t$name
+scores_l2$top_500<- music_l2t$top_500
+scores_l2 <- scores_l2 %>% mutate(name=ifelse(top_500==TRUE,name,""))
+#scores_l2 <- scores_l2 %>% mutate(name=ifelse(runif(1)<.3,name,""))
+scores_l2
+```
+
+
+
+
+```{r}
+#FALTA CAMBIAR LOS EJES,REVISAR PC2!!!!
+ggplot(scores_l2, aes(x=PC1, y= PC2, label=name, colour=top_500)) + 
+  geom_vline(xintercept=0, colour = 'red') +
+  geom_hline(yintercept=0, colour = 'red') +
+  geom_point()+
+  geom_text_repel(size=2.5, segment.alpha = 0.3, force = 0.8, seed=202) +
+  xlab('acousticness & instrumentalness vs. energy & loudness') +
+  ylab('duration_ms & liveness vs. danceability & valence')
+```
+
+```{r}
+music_l3t<-data_range %>% filter(ranges==levels(data_range$ranges)[3])
+music_l3<- data_range %>% filter(ranges==levels(data_range$ranges)[3])
+music_l3 <- music_l3[,c(7:16)]
+music.pcal3 <-prcomp(music_l3, scale=TRUE)
+```
+
+
+```{r}
+fviz_eig(music.pcal3)
+```
+
+
+```{r}
+#Para saber cuáles componentes
+round(music.pcal3$rotation[, 1:2], 2)
+```
+
+
+```{r}
+scores_l3<- music.pcal3$x|> as_tibble()
+scores_l3$name<- music_l3t$name
+scores_l3$top_500<- music_l3t$top_500
+#scores_l3 <- scores_l3 %>% mutate(name=ifelse(top_500==TRUE, name, ""))
+scores_l3
+```
+
+
+
+
+```{r}
+#FALTA CAMBIAR LOS EJES!!!!
+ggplot(scores_l3, aes(x=PC1, y= -PC2, label=name, colour=top_500)) + 
+  geom_vline(xintercept=0, colour = 'red') +
+  geom_hline(yintercept=0, colour = 'red') +
+  geom_point()+
+  geom_text_repel(size=2.5, segment.alpha = 0.3, force = 0.1, seed=202) +
+  xlab('acousticness & instrumentalness vs. energy & loudness') +
+  ylab('duration_ms & liveness vs. danceability & valence')
+```
+
+
+
+```{r}
+music_l4t<-data_range %>% filter(ranges==levels(data_range$ranges)[4])
+music_l4<- data_range %>% filter(ranges==levels(data_range$ranges)[4])
+music_l4 <- music_l4[,c(7:16)]
+music.pcal4 <-prcomp(music_l4, scale=TRUE)
+```
+
+
+```{r}
+fviz_eig(music.pcal4)
+```
+
+
+```{r}
+#Para saber cuáles componentes
+round(music.pcal4$rotation[, 1:2], 2)
+```
+
+
+```{r}
+scores_l4<- music.pcal4$x|> as_tibble()
+scores_l4$name<- music_l4t$name
+scores_l4$top_500<- music_l4t$top_500
+#scores_l4 <- scores_l4 %>% mutate(name=ifelse(top_500==TRUE, name, ""))
+scores_l4
+```
+
+
+
+
+```{r}
+#FALTA CAMBIAR LOS EJES!!!!
+ggplot(scores_l4, aes(x=PC1, y= PC2, label=name, colour=top_500)) + 
+  geom_vline(xintercept=0, colour = 'red') +
+  geom_hline(yintercept=0, colour = 'red') +
+  geom_point()+
+  geom_text_repel(size=2.5,  seed=202) +
+  xlab('acousticness & instrumentalness vs. energy & loudness') +
+  ylab('duration_ms & liveness vs. danceability & valence')
+```
+
+
+```{r}
+music_l5t<-data_range %>% filter(ranges==levels(data_range$ranges)[5])
+music_l5<- data_range %>% filter(ranges==levels(data_range$ranges)[5])
+music_l5 <- music_l5[,c(7:16)]
+music.pcal5 <-prcomp(music_l5, scale=TRUE)
+```
+
+
+```{r}
+fviz_eig(music.pcal5)
+```
+
+
+```{r}
+#Para saber cuáles componentes
+round(music.pcal5$rotation[, 1:2], 2)
+```
+
+
+```{r}
+scores_l5<- music.pcal5$x|> as_tibble()
+scores_l5$name<- music_l5t$name
+scores_l5$top_500<- music_l5t$top_500
+#scores_l5 <- scores_l5 %>% mutate(name=ifelse(top_500==TRUE, name, ""))
+scores_l5
+```
+
+
+
+
+```{r}
+#FALTA CAMBIAR LOS EJES!!!!
+ggplot(scores_l5, aes(x=PC1, y= -PC2, label=name, colour=top_500)) + 
+  geom_vline(xintercept=0, colour = 'red') +
+  geom_hline(yintercept=0, colour = 'red') +
+  geom_point()+
+  geom_text_repel(size=2.5, segment.alpha = 0.3, force = 0.1, seed=202) +
+  xlab('acousticness & instrumentalness vs. energy & loudness') +
+  ylab('duration_ms & liveness vs. danceability & valence')
+```
+
+
+
+
+
+
+
+

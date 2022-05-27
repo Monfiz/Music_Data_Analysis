@@ -1,0 +1,47 @@
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggrepel)
+library(tidyverse)
+library(skimr)
+
+install.packages("Rtsne")
+library(Rtsne)
+
+install.packages("viridis")  # Install
+library("viridis")  
+
+set.seed(145804)
+```
+
+
+```{r}
+data <- read_csv("./Data/spotify_analysis.csv")
+```
+
+```{r}
+ sin_lineas <- theme(panel.grid.major = element_blank(),
+                    panel.grid.minor = element_blank())
+```
+
+```{r}
+music <- data[,c(7:16)]
+data2 <- data %>%  mutate(duplicated = music %>% duplicated()) %>% filter(duplicated==FALSE)
+music2 <- data2[,c(7:16)]
+
+
+tsne_music <- Rtsne(music2, max_iter=6000, scale=TRUE)
+tsne_music_Y <- tsne_music$Y
+
+
+
+
+colnames(tsne_music_Y) <- c("V1", "V2")
+dat_tsne <- as_tibble(tsne_music_Y )
+dat_tsne$name <- as.character(data2$name)
+dat_tsne$top_500 <- data2$top_500
+dat_tsne$year<- data2$year
+
+ggplot(dat_tsne, aes(x=V1, y=V2,  colour = year)) + geom_point() +
+  scale_color_viridis(discrete = FALSE, option = "D")+theme_minimal() 
+```
+
