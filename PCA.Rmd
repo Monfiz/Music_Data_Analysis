@@ -5,6 +5,7 @@ library(tidyverse)
 library(skimr)
 library("devtools")
 library("factoextra")
+library(patchwork)
 ```
 
 
@@ -17,6 +18,7 @@ data2<-data
 #Leemos los datos
 head(data)
 ```
+
 ```{r}
 names(data)
 ```
@@ -319,9 +321,138 @@ ggplot(scores_l5, aes(x=PC1, y= -PC2, label=name, colour=top_500)) +
 ```
 
 
+## Last Decade
+
+```{r}
+data_last <- read_csv("./Data/spotify_analysis_last_decade.csv")
+data2_last<-data_last
+```
+
+```{r}
+music_last <- data_last[,c(7:16)]
+```
 
 
+```{r}
+music_last.pca <-prcomp(music_last, scale=TRUE)
+summary(music_last.pca)
+```
 
+
+Vemos que la primer componente explica el 28.63% de la varianza, la segunda el 14.77% y la tercer el 11.88%. En total, las tres primeras componentes explican el   55.28% de la varianza. Podemos ver gráficamente el porcentaje de varianza explicada:
+```{r}
+fviz_eig(music_last.pca)
+```
+
+```{r}
+#Para saber cuáles componentes
+round(music_last.pca$rotation[, 1:2], 2)
+```
+
+
+```{r}
+scores_w_last <- music_last.pca$x|> as_tibble()
+scores_w_last$name<- data_last$name
+scores_w_last$id_spotify <- data_last$id_spotify
+scores_w_last$top_500 <- data_last$top_500
+
+scores_w_last <- rbind(
+                  scores_w_last |>
+                    filter(top_500 == TRUE),
+                  scores_w_last |>
+                    filter(top_500 == FALSE) |>
+                    sample_n(500)
+                )
+```
+
+```{r}
+ggplot(scores_w_last, aes(x=PC1, y= -PC2, label=name, colour=top_500)) + 
+  geom_vline(xintercept=0, colour = 'red') +
+  geom_hline(yintercept=0, colour = 'red') +
+  geom_point()+
+  geom_text_repel(size=2.5, segment.alpha = 0.3, force = 0.1, seed=202) +
+  xlab('acousticness & instrumentalness vs. energy & loudness') +
+  ylab('duration_ms & liveness vs. danceability & valence')
+```
+
+```{r}
+fviz_pca_var(music_last.pca, col.var="contrib")+
+ scale_color_gradient2(low="azure", mid="cornflowerblue",high="cyan4", midpoint=1) +
+ theme_minimal()
+
+```
+
+```{r}
+music_last_top_true <- (data_last |> filter(top_500 == TRUE))[,c(7:16)]
+music_last_top_false <- (data_last |> filter(top_500 == FALSE))[,c(7:16)]
+```
+
+
+```{r}
+music_last_top_true.pca <-prcomp(music_last_top_true, scale=TRUE)
+music_last_top_false.pca <-prcomp(music_last_top_false, scale=TRUE)
+music_last_top_false.pca$rotation <- -1*music_last_top_false.pca$rotation
+summary(music_last_top_true.pca)
+summary(music_last_top_false.pca)
+```
+
+
+Vemos que la primer componente explica el 28.63% de la varianza, la segunda el 14.77% y la tercer el 11.88%. En total, las tres primeras componentes explican el   55.28% de la varianza. Podemos ver gráficamente el porcentaje de varianza explicada:
+
+```{r}
+fviz_eig(music_last_top_true.pca)
+fviz_eig(music_last_top_false.pca)
+```
+
+```{r}
+#Para saber cuáles componentes
+round(music_last_top_true.pca$rotation[, 1:2], 2)
+round(music_last_top_false.pca$rotation[, 1:2], 2)
+```
+
+
+```{r}
+scores_w_last_top_true <- music_last_top_true.pca$x|> as_tibble()
+scores_w_last_top_true$name<- (data_last |> filter(top_500 == TRUE))$name
+scores_w_last_top_true$id_spotify <- (data_last |> filter(top_500 == TRUE))$id_spotify
+scores_w_last_top_true$top_500 <- (data_last |> filter(top_500 == TRUE))$top_500
+
+scores_w_last_top_false <- music_last_top_false.pca$x|> as_tibble()
+scores_w_last_top_false$name<- (data_last |> filter(top_500 == FALSE))$name
+scores_w_last_top_false$id_spotify <- (data_last |> filter(top_500 == FALSE))$id_spotify
+scores_w_last_top_false$top_500 <- (data_last |> filter(top_500 == FALSE))$top_500
+```
+
+```{r}
+ggplot(scores_w_last_top_true, aes(x=PC1, y= -PC2, label=name, colour=top_500)) + 
+  geom_vline(xintercept=0, colour = 'red') +
+  geom_hline(yintercept=0, colour = 'red') +
+  geom_point()+
+  geom_text_repel(size=2.5, segment.alpha = 0.3, force = 0.1, seed=202) +
+  xlab('acousticness vs. energy & loudness') +
+  ylab('duration_ms & liveness vs. danceability & valence')
+```
+
+```{r}
+ggplot(scores_w_last_top_false, aes(x=PC1, y= -PC2, label=name, colour=top_500)) + 
+  geom_vline(xintercept=0, colour = 'red') +
+  geom_hline(yintercept=0, colour = 'red') +
+  geom_point()+
+  geom_text_repel(size=2.5, segment.alpha = 0.3, force = 0.1, seed=202) +
+  xlab('acousticness & instrumentalness vs. energy & loudness') +
+  ylab('duration_ms & liveness vs. danceability & valence')
+```
+
+```{r}
+g1 <- fviz_pca_var(music_last_top_true.pca, col.var="contrib")+
+ scale_color_gradient2(low="azure", mid="cornflowerblue",high="cyan4", midpoint=1) +
+ theme_minimal()
+g2 <- fviz_pca_var(music_last_top_false.pca, col.var="contrib")+
+ scale_color_gradient2(low="azure", mid="cornflowerblue",high="cyan4", midpoint=1) +
+ theme_minimal()
+
+g1 + g2
+```
 
 
 

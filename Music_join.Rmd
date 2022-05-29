@@ -326,6 +326,7 @@ did not mactch with anything in the Spotify one.
 ```{r}
 top_500_fp <- read.table("top_500_false_positives.txt", header=T)
 top_500_fp <- top_500_fp |> drop_na()
+
 top_500_fp
 ```
 
@@ -351,7 +352,8 @@ Now we join this with the Spotify columns.
 rolling_stones_df <- clean_top_500 |> 
   select(id_spotify) |>
   left_join(spotify |> mutate(id_spotify = ID)) |>
-  select(-c(tejas, texto, ID, id)) |>
+  # select(-c(tejas, texto, ID, id)) |>
+  select(-c(ID, id)) |>
   select(c("id_spotify", "artists", "name", "release_date", "year",
            "acousticness", "danceability", "speechiness", "tempo", 
            "valence", "energy", "instrumentalness", "liveness", 
@@ -387,7 +389,58 @@ spotify_df |> head()
 final_df <- rbind(rolling_stones_df, spotify_df)
 write.csv(final_df, "./Data/spotify_analysis.csv")
 ```
+Last decade
 
+
+```{r}
+spotify_last <- read.csv("./Data/data_spotify_1921_2020.csv")
+
+spotify_last <- spotify_last |> 
+  filter(year > 2009)
+
+### Remove those with strange characters
+spotify_last <- spotify_last |>
+  mutate(texto = paste(name, artists, sep = "    ")) |>
+  mutate(texto = str_to_lower(texto)) |> 
+  mutate(texto = str_remove_all(texto, pattern = "[^a-z -]")) |>
+  filter(nchar(texto) > 10)
+
+spotify_aux <- data.frame(spotify_last)
+
+for (word in words_to_remove){
+  spotify_aux <- spotify_aux |> 
+                  filter(!grepl(toupper(word), toupper(name)))
+}
+
+### Reassign to the spotify dataset
+spotify_last <- data.frame(spotify_aux)
+
+### Add index to reference later
+spotify_last$ID <- 1:nrow(spotify_last)
+```
+
+```{r}
+set.seed(88345)
+
+spotify_last_df <- spotify_last |> 
+  subset(ID %!in% (rolling_stones_df |> pull(id_spotify))) |>
+  sample_n(2500) |>
+  select(-c(id)) |>
+  rename(id_spotify = ID) |>
+  select(c("id_spotify", "artists", "name", "release_date", "year",
+           "acousticness", "danceability", "speechiness", "tempo", 
+           "valence", "energy", "instrumentalness", "liveness", 
+           "loudness", "duration_ms", "popularity",
+           "key", "mode", "explicit")) |>
+  mutate(top_500 = F)
+
+spotify_last_df
+```
+
+```{r}
+final_last_df <- rbind(rolling_stones_df, spotify_last_df)
+write.csv(final_last_df, "./Data/spotify_analysis_last_decade.csv")
+```
 
 ## First aproch: simple join
 ```{r}
