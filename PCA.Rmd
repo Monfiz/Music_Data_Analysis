@@ -1,22 +1,26 @@
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library("devtools")
+#install_github("kassambara/factoextra")
 library(ggrepel)
 library(tidyverse)
 library(skimr)
 library("devtools")
 library("factoextra")
+library("viridis")    
+library(scales)
+library(purrr)
 library(patchwork)
 ```
 
 
 ```{r}
+#Leemos los datos
 data <- read_csv("./Data/spotify_analysis.csv")
 data2<-data
-```
-
-```{r}
-#Leemos los datos
 head(data)
+
+
 ```
 
 ```{r}
@@ -29,24 +33,49 @@ skimr::skim(data)
 ```
 
 ```{r}
+#selección de variables numéricas
 music <- data[,c(7:16)]
+skimr::skim(music)
 ```
 
 
 ```{r}
+#Análisis de componentes principales
 music.pca <-prcomp(music, scale=TRUE)
 summary(music.pca)
+
 ```
 
 
-Vemos que la primer componente explica el 28.63% de la varianza, la segunda el 14.77% y la tercer el 11.88%. En total, las tres primeras componentes explican el   55.28% de la varianza. Podemos ver gráficamente el porcentaje de varianza explicada:
+Al hacer el análisis de componentes principales de nuestras variables numéricas (acousticness, danceability, speechiness, tempo, valence, energy, instrumentalness, liveness, loudness and duration), observamos que la primer componente explica el 28.63% de la varianza, la segunda el 14.77% y la tercer el 11.88%. En total, las tres primeras componentes explican el 55.28% de la varianza. Podemos ver gráficamente el porcentaje de varianza explicada. Además, podemos observar gráficamente cómo las variables se ordenan por la cantidad de varianza original que describen en las dos principales componentes. 
+
 ```{r}
-fviz_eig(music.pca)
+fviz_eig(music.pca,   choice = c("variance", "eigenvalue"),
+  geom = c("bar", "line"),
+  barfill = "darkseagreen",
+  barcolor = "black",
+  linecolor = "darkslategray",
+  ncp = 10,
+  addlabels = TRUE,
+  hjust = 0,
+  main = NULL,
+  xlab = NULL,
+  ylab = NULL,
+  title="PCA - Spotify",
+  ggtheme = theme_minimal())
+
 ```
+Gráficamente, podemos observar la contribución de las variables para las dos principales dimensiones. Este es un análisis muy interesante ya que podemos ver la dirección y magnitud de estas variables representadas en vectores:
+
+```{r}
+fviz_pca_var(music.pca, col.var="contrib")+
+ scale_color_gradient2(low="azure", mid="cornflowerblue",high="cyan4", midpoint=1) +
+ theme_minimal()
+```
+
 ```{r}
 set.seed(145804)
-data2<-data %>% filter(top_500==TRUE)
-data2 %>% sample()
+data2<-data 
 ```
 
 ```{r}
@@ -60,20 +89,26 @@ scores_w <- music.pca$x|> as_tibble()
 scores_w$name<- data$name
 scores_w$id_spotify <- data$id_spotify
 scores_w$top_500 <- data$top_500
+scores_w$year <- data$year
 scores_w
 ```
 
 
 
 
+Notamos que la primer componente separa a las canciones con acousticness e instrumentalness de las que tienen energy y loudness (acousticness & instrumentalness vs. energy & loudness). Observamos también que la segunda componente principal separa a las canciones que tienen una cierta duración y liveness de las que tienen danceability y valence (duration_ms & liveness vs. danceability & valence). Observamos nuestro gráfico de las dos principales componentes de todas nuestras canciones y nos percatamos que existe cierto patrón por años, por lo cual, hicimos un filtro por décadas (de 1948 a 2008). En total seis décadas e hicimos el análisis de componentes principales de cada década. 
+
 ```{r}
-ggplot(scores_w, aes(x=PC1, y= -PC2, label=name, colour=top_500)) + 
-  geom_vline(xintercept=0, colour = 'red') +
-  geom_hline(yintercept=0, colour = 'red') +
-  geom_point()+
+ggplot(scores_w, aes(x=PC1, y=PC2, label=name, colour=year)) + 
+  geom_vline(xintercept=0, colour = 'black', linetype="dotted") +
+  geom_hline(yintercept=0, colour = 'black', linetype="dotted") +
+  scale_color_viridis(option = "D")+
+  geom_point(alpha=0.5)+
   geom_text_repel(size=2.5, segment.alpha = 0.3, force = 0.1, seed=202) +
   xlab('acousticness & instrumentalness vs. energy & loudness') +
-  ylab('duration_ms & liveness vs. danceability & valence')
+  ylab('duration_ms & liveness vs. danceability & valence')+
+  labs(title = "PCA por año" )+
+  theme_minimal()
 ```
 
 ```{r}
@@ -88,14 +123,19 @@ scores_w$year <- data$year
 scores_w
 ```
 ```{r}
-ggplot(scores_w, aes(x=PC1, y= PC2, label=name, colour=year)) + 
-  geom_vline(xintercept=0, colour = 'blue') +
-  geom_hline(yintercept=0, colour = 'blue') +
-  geom_point()+
+ggplot(scores_w, aes(x=PC1, y=PC2, label=name, colour=year)) + 
+  geom_vline(xintercept=0, colour = 'black', linetype="dotted") +
+  geom_hline(yintercept=0, colour = 'black', linetype="dotted") +
+  scale_color_viridis(option = "D")+
+  geom_point(alpha=0.5)+
   geom_text_repel(size=2.5, segment.alpha = 0.3, force = 0.1, seed=202) +
   xlab('acousticness & instrumentalness vs. energy & loudness') +
-  ylab('duration_ms & liveness vs. danceability & valence')
+  ylab('duration_ms & liveness vs. danceability & valence')+
+  labs(title = "PCA por año" )+
+  theme_minimal()
 ```
+
+
 ```{r}
 data$year %>% quantile(c(.25,.5,.75))
 #1948-65
@@ -117,11 +157,26 @@ music_l1 <- music_l1[,c(7:16)]
 music.pcal1 <-prcomp(music_l1, scale=TRUE)
 ```
 
+Para la primer década; observamos que el porcentaje de varianza explicada en las dos componentes principales es muy parecido al agregado de nuestras base de datos de todos los años. 
 
 ```{r}
-fviz_eig(music.pcal1)
+g1<- fviz_eig(music.pcal1,   choice = c("variance", "eigenvalue"),
+  geom = c("bar", "line"),
+  barfill = " darkseagreen",
+  barcolor = "black",
+  linecolor = "darkslategray",
+  ncp = 10,
+  addlabels = TRUE,
+  hjust = 0,
+  main = NULL,
+  xlab = NULL,
+  ylab = NULL,
+  title="PCA - Spotify (1948-1957)",
+  ggtheme = theme_minimal())
 ```
 
+
+Notamos que la primer componente separa a las canciones con acousticness e instrumentalness de las que tienen energy y loudness (acousticness & instrumentalness vs. energy & loudness). Sin embargo,  la segunda componente principal separa a las canciones que tienen loudness y liveness de las que tienen danceability y speechiness a diferencia de la que no está filtrada por décadas (duration_ms & liveness vs. danceability & valence).
 
 ```{r}
 #Para saber cuáles componentes
@@ -136,19 +191,20 @@ scores_l1$top_500<- music_l1t$top_500
 scores_l1
 ```
 
-
-
-
 ```{r}
-#FALTA CAMBIAR LOS EJES!!!!
-ggplot(scores_l1, aes(x=PC1, y= PC2, label=name, colour=top_500)) + 
-  geom_vline(xintercept=0, colour = 'red') +
-  geom_hline(yintercept=0, colour = 'red') +
-  geom_point()+
+f1<- ggplot(scores_l1, aes(x=PC1, y= PC2, label=name, colour=top_500)) + 
+  geom_vline(xintercept=0, colour = 'black', linetype="dotted") +
+  geom_hline(yintercept=0, colour = 'black', linetype="dotted") +
+  geom_point(alpha=0.7)+
   geom_text_repel(size=2.5, segment.alpha = 0.3, force = 0.1, seed=202) +
-  xlab('acousticness & instrumentalness vs. energy & loudness') +
-  ylab('duration_ms & liveness vs. danceability & valence')
+   xlab('acousticness & instrumentalness vs. energy & loudness') +
+  ylab('loudness & liveness vs. danceability & speechiness ')+
+  labs(title = "PCA 1948-1957" )+
+  theme_minimal()
 ```
+
+
+
 
 
 ```{r}
@@ -160,13 +216,26 @@ music.pcal2 <-prcomp(music_l2, scale=TRUE)
 
 
 ```{r}
-fviz_eig(music.pcal2)
+g2<-fviz_eig(music.pcal2,   choice = c("variance", "eigenvalue"),
+  geom = c("bar", "line"),
+  barfill = " darkseagreen",
+  barcolor = "black",
+  linecolor = "darkslategray",
+  ncp = 10,
+  addlabels = TRUE,
+  hjust = 0,
+  main = NULL,
+  xlab = NULL,
+  ylab = NULL,
+  title="PCA - Spotify (1958-1967)",
+  ggtheme = theme_minimal())
 ```
 
 
 ```{r}
 #Para saber cuáles componentes
 round(music.pcal2$rotation[, 1:2], 2)
+
 ```
 
 
@@ -181,17 +250,16 @@ scores_l2
 ```
 
 
-
-
 ```{r}
-#FALTA CAMBIAR LOS EJES,REVISAR PC2!!!!
-ggplot(scores_l2, aes(x=PC1, y= PC2, label=name, colour=top_500)) + 
-  geom_vline(xintercept=0, colour = 'red') +
-  geom_hline(yintercept=0, colour = 'red') +
-  geom_point()+
-  geom_text_repel(size=2.5, segment.alpha = 0.3, force = 0.8, seed=202) +
-  xlab('acousticness & instrumentalness vs. energy & loudness') +
-  ylab('duration_ms & liveness vs. danceability & valence')
+f2<-ggplot(scores_l2, aes(x=PC1, y= PC2, label=name, colour=top_500)) + 
+  geom_vline(xintercept=0, colour = 'black', linetype="dotted") +
+  geom_hline(yintercept=0, colour = 'black', linetype="dotted") +
+  geom_point(alpha=0.7)+
+  geom_text_repel(size=2.5, segment.alpha = 0.3, force = 0.1, seed=202) +
+   xlab('acousticness  vs. energy & valence') +
+  ylab('danceability vs. liveness & speechiness')+
+  labs(title = "PCA 1958-1967" )+
+  theme_minimal()
 ```
 
 ```{r}
@@ -203,7 +271,19 @@ music.pcal3 <-prcomp(music_l3, scale=TRUE)
 
 
 ```{r}
-fviz_eig(music.pcal3)
+g3<-fviz_eig(music.pcal3,   choice = c("variance", "eigenvalue"),
+  geom = c("bar", "line"),
+  barfill = " darkseagreen",
+  barcolor = "black",
+  linecolor = "darkslategray",
+  ncp = 10,
+  addlabels = TRUE,
+  hjust = 0,
+  main = NULL,
+  xlab = NULL,
+  ylab = NULL,
+  title="PCA - Spotify (1968-1977)",
+  ggtheme = theme_minimal())
 ```
 
 
@@ -225,14 +305,15 @@ scores_l3
 
 
 ```{r}
-#FALTA CAMBIAR LOS EJES!!!!
-ggplot(scores_l3, aes(x=PC1, y= -PC2, label=name, colour=top_500)) + 
-  geom_vline(xintercept=0, colour = 'red') +
-  geom_hline(yintercept=0, colour = 'red') +
-  geom_point()+
+f3<-ggplot(scores_l3, aes(x=PC1, y= PC2, label=name, colour=top_500)) + 
+  geom_vline(xintercept=0, colour = 'black', linetype="dotted") +
+  geom_hline(yintercept=0, colour = 'black', linetype="dotted") +
+  geom_point(alpha=0.7)+
   geom_text_repel(size=2.5, segment.alpha = 0.3, force = 0.1, seed=202) +
-  xlab('acousticness & instrumentalness vs. energy & loudness') +
-  ylab('duration_ms & liveness vs. danceability & valence')
+   xlab('acousticness vs. energy & loudness') +
+  ylab('liveness & duration vs. danceability & valence')+
+  labs(title = "PCA 1968-1977" )+
+  theme_minimal()
 ```
 
 
@@ -246,7 +327,19 @@ music.pcal4 <-prcomp(music_l4, scale=TRUE)
 
 
 ```{r}
-fviz_eig(music.pcal4)
+g4<-fviz_eig(music.pcal4,   choice = c("variance", "eigenvalue"),
+  geom = c("bar", "line"),
+  barfill = "darkseagreen",
+  barcolor = "black",
+  linecolor = "darkslategray",
+  ncp = 10,
+  addlabels = TRUE,
+  hjust = 0,
+  main = NULL,
+  xlab = NULL,
+  ylab = NULL,
+  title="PCA - Spotify (1978-1988)",
+  ggtheme = theme_minimal())
 ```
 
 
@@ -266,16 +359,16 @@ scores_l4
 
 
 
-
 ```{r}
-#FALTA CAMBIAR LOS EJES!!!!
-ggplot(scores_l4, aes(x=PC1, y= PC2, label=name, colour=top_500)) + 
-  geom_vline(xintercept=0, colour = 'red') +
-  geom_hline(yintercept=0, colour = 'red') +
-  geom_point()+
-  geom_text_repel(size=2.5,  seed=202) +
-  xlab('acousticness & instrumentalness vs. energy & loudness') +
-  ylab('duration_ms & liveness vs. danceability & valence')
+f4<-ggplot(scores_l4, aes(x=PC1, y= PC2, label=name, colour=top_500)) + 
+  geom_vline(xintercept=0, colour = 'black', linetype="dotted") +
+  geom_hline(yintercept=0, colour = 'black', linetype="dotted") +
+  geom_point(alpha=0.7)+
+  geom_text_repel(size=2.5, segment.alpha = 0.3, force = 0.1, seed=202) +
+   xlab('energy & loudness vs. acousticness') +
+  ylab('liveness vs. danceability  & valence')+
+  labs(title = "PCA 1978-1987" )+
+  theme_minimal()
 ```
 
 
@@ -288,7 +381,19 @@ music.pcal5 <-prcomp(music_l5, scale=TRUE)
 
 
 ```{r}
-fviz_eig(music.pcal5)
+g5<-fviz_eig(music.pcal5,   choice = c("variance", "eigenvalue"),
+  geom = c("bar", "line"),
+  barfill =  "darkseagreen",
+  barcolor = "black",
+  linecolor = "darkslategray",
+  ncp = 10,
+  addlabels = TRUE,
+  hjust = 0,
+  main = NULL,
+  xlab = NULL,
+  ylab = NULL,
+  title="PCA - Spotify (1988-1997)",
+  ggtheme = theme_minimal())
 ```
 
 
@@ -310,22 +415,83 @@ scores_l5
 
 
 ```{r}
-#FALTA CAMBIAR LOS EJES!!!!
-ggplot(scores_l5, aes(x=PC1, y= -PC2, label=name, colour=top_500)) + 
-  geom_vline(xintercept=0, colour = 'red') +
-  geom_hline(yintercept=0, colour = 'red') +
-  geom_point()+
+f5<-ggplot(scores_l5, aes(x=PC1, y= PC2, label=name, colour=top_500)) + 
+  geom_vline(xintercept=0, colour = 'black', linetype="dotted") +
+  geom_hline(yintercept=0, colour = 'black', linetype="dotted") +
+  geom_point(alpha=0.7)+
   geom_text_repel(size=2.5, segment.alpha = 0.3, force = 0.1, seed=202) +
-  xlab('acousticness & instrumentalness vs. energy & loudness') +
-  ylab('duration_ms & liveness vs. danceability & valence')
+   xlab('energy & loudness vs. acousticness ') +
+  ylab('danceability &speechiness vs. tempo')+
+  labs(title = "PCA 1988-1997" )+
+  theme_minimal()
 ```
 
+
+```{r}
+music_l6t<-data_range %>% filter(ranges==levels(data_range$ranges)[6])
+music_l6<- data_range %>% filter(ranges==levels(data_range$ranges)[6])
+music_l6 <- music_l6[,c(7:16)]
+music.pcal6 <-prcomp(music_l6, scale=TRUE)
+```
+
+```{r}
+g6<-fviz_eig(music.pcal6,   choice = c("variance", "eigenvalue"),
+  geom = c("bar", "line"),
+  barfill =  "darkseagreen",
+  barcolor = "black",
+  linecolor = "darkslategray",
+  ncp = 10,
+  addlabels = TRUE,
+  hjust = 0,
+  main = NULL,
+  xlab = NULL,
+  ylab = NULL,
+  title="PCA - Spotify (1998-2008)",
+  ggtheme = theme_minimal())
+```
+
+```{r}
+#Para saber cuáles componentes
+round(music.pcal6$rotation[, 1:2], 2)
+```
+
+
+```{r}
+scores_l6<- music.pcal6$x|> as_tibble()
+scores_l6$name<- music_l6t$name
+scores_l6$top_500<- music_l6t$top_500
+#scores_l6 <- scores_l6 %>% mutate(name=ifelse(top_500==TRUE, name, ""))
+scores_l6
+```
+
+```{r}
+f6<-ggplot(scores_l6, aes(x=PC1, y= PC2, label=name, colour=top_500)) + 
+  geom_vline(xintercept=0, colour = 'black', linetype="dotted") +
+  geom_hline(yintercept=0, colour = 'black', linetype="dotted") +
+  geom_point(alpha=0.7)+
+  geom_text_repel(size=2.5, segment.alpha = 0.3, force = 0.1, seed=202) +
+   xlab('loudness & energy  vs. acousticness') +
+  ylab('danceability & valence vs. duration')+
+  labs(title = "PCA 1998-2008" )+
+  theme_minimal()
+```
+
+
+
+```{r}
+g1+g2+g3+g4+g5+g6
+```
+
+```{r setup, include=FALSE}
+f1+f2+f3+f4+f5+f6
+```
 
 ## Last Decade
 
 ```{r}
 data_last <- read_csv("./Data/spotify_analysis_last_decade.csv")
 data2_last<-data_last
+summary(data2_last)
 ```
 
 ```{r}
@@ -341,7 +507,20 @@ summary(music_last.pca)
 
 Vemos que la primer componente explica el 28.63% de la varianza, la segunda el 14.77% y la tercer el 11.88%. En total, las tres primeras componentes explican el   55.28% de la varianza. Podemos ver gráficamente el porcentaje de varianza explicada:
 ```{r}
-fviz_eig(music_last.pca)
+fviz_eig(music_last.pca,   choice = c("variance", "eigenvalue"),
+  geom = c("bar", "line"),
+  barfill = " darkseagreen",
+  barcolor = "black",
+  linecolor = "darkslategray",
+  ncp = 10,
+  addlabels = TRUE,
+  hjust = 0,
+  main = NULL,
+  xlab = NULL,
+  ylab = NULL,
+  title="PCA - Spotify & Top 500 (1948-2020)",
+  ggtheme = theme_minimal())
+
 ```
 
 ```{r}
@@ -366,20 +545,21 @@ scores_w_last <- rbind(
 ```
 
 ```{r}
-ggplot(scores_w_last, aes(x=PC1, y= -PC2, label=name, colour=top_500)) + 
-  geom_vline(xintercept=0, colour = 'red') +
-  geom_hline(yintercept=0, colour = 'red') +
-  geom_point()+
+ggplot(scores_w_last, aes(x=PC1, y= PC2, label=name, colour=top_500)) + 
+  geom_vline(xintercept=0, colour = 'black', linetype="dotted") +
+  geom_hline(yintercept=0, colour = 'black', linetype="dotted") +
+  geom_point(alpha=0.7)+
   geom_text_repel(size=2.5, segment.alpha = 0.3, force = 0.1, seed=202) +
-  xlab('acousticness & instrumentalness vs. energy & loudness') +
-  ylab('duration_ms & liveness vs. danceability & valence')
+   xlab('acousticness  vs. energy & loudness') +
+  ylab('durationy vs. danceability & valence')+
+  labs(title = "PCA 1948-2020: Spotify & Top-500" )+
+  theme_minimal()
 ```
 
 ```{r}
 fviz_pca_var(music_last.pca, col.var="contrib")+
  scale_color_gradient2(low="azure", mid="cornflowerblue",high="cyan4", midpoint=1) +
  theme_minimal()
-
 ```
 
 ```{r}
@@ -400,14 +580,46 @@ summary(music_last_top_false.pca)
 Vemos que la primer componente explica el 28.63% de la varianza, la segunda el 14.77% y la tercer el 11.88%. En total, las tres primeras componentes explican el   55.28% de la varianza. Podemos ver gráficamente el porcentaje de varianza explicada:
 
 ```{r}
-fviz_eig(music_last_top_true.pca)
-fviz_eig(music_last_top_false.pca)
+
+
+
+h1<-fviz_eig(music_last_top_true.pca,   choice = c("variance", "eigenvalue"),
+  geom = c("bar", "line"),
+  barfill = " darkseagreen",
+  barcolor = "black",
+  linecolor = "darkslategray",
+  ncp = 10,
+  addlabels = TRUE,
+  hjust = 0,
+  main = NULL,
+  xlab = NULL,
+  ylab = NULL,
+  title="Top 500(1948-2008)",
+  ggtheme = theme_minimal())
+
+h2<-fviz_eig(music_last_top_false.pca,   choice = c("variance", "eigenvalue"),
+  geom = c("bar", "line"),
+  barfill = " darkseagreen",
+  barcolor = "black",
+  linecolor = "darkslategray",
+  ncp = 10,
+  addlabels = TRUE,
+  hjust = 0,
+  main = NULL,
+  xlab = NULL,
+  ylab = NULL,
+  title="Spotify (1948-2020)",
+  ggtheme = theme_minimal())
+
+h1+h2
 ```
 
 ```{r}
 #Para saber cuáles componentes
 round(music_last_top_true.pca$rotation[, 1:2], 2)
 round(music_last_top_false.pca$rotation[, 1:2], 2)
+
+
 ```
 
 
@@ -424,24 +636,29 @@ scores_w_last_top_false$top_500 <- (data_last |> filter(top_500 == FALSE))$top_5
 ```
 
 ```{r}
-ggplot(scores_w_last_top_true, aes(x=PC1, y= -PC2, label=name, colour=top_500)) + 
-  geom_vline(xintercept=0, colour = 'red') +
-  geom_hline(yintercept=0, colour = 'red') +
-  geom_point()+
+i1<-ggplot(scores_w_last_top_true, aes(x=PC1, y= PC2, label=name, colour=top_500)) + 
+  geom_vline(xintercept=0, colour = 'black', linetype="dotted") +
+  geom_hline(yintercept=0, colour = 'black', linetype="dotted") +
+  geom_point(alpha=0.7)+
   geom_text_repel(size=2.5, segment.alpha = 0.3, force = 0.1, seed=202) +
-  xlab('acousticness vs. energy & loudness') +
-  ylab('duration_ms & liveness vs. danceability & valence')
+   xlab('acousticness  vs. energy & loudness') +
+  ylab('duration vs. danceability & valence')+
+  labs(title = "PCA 1948-2008 Top 500" )+
+  theme_minimal()
+i2<-ggplot(scores_w_last_top_false, aes(x=PC1, y= PC2, label=name, colour=top_500)) + 
+  geom_vline(xintercept=0, colour = 'black', linetype="dotted") +
+  geom_hline(yintercept=0, colour = 'black', linetype="dotted") +
+  geom_point(alpha=0.7)+
+  geom_text_repel(size=2.5, segment.alpha = 0.3, force = 0.1, seed=202) +
+   xlab('acousticness  vs. energy & loudness') +
+  ylab('duration vs. danceability & valence')+
+  labs(title = "PCA 1948-2020 Spotify" )+
+  theme_minimal()
+
+i1+i2
 ```
 
-```{r}
-ggplot(scores_w_last_top_false, aes(x=PC1, y= -PC2, label=name, colour=top_500)) + 
-  geom_vline(xintercept=0, colour = 'red') +
-  geom_hline(yintercept=0, colour = 'red') +
-  geom_point()+
-  geom_text_repel(size=2.5, segment.alpha = 0.3, force = 0.1, seed=202) +
-  xlab('acousticness & instrumentalness vs. energy & loudness') +
-  ylab('duration_ms & liveness vs. danceability & valence')
-```
+
 
 ```{r}
 g1 <- fviz_pca_var(music_last_top_true.pca, col.var="contrib")+
@@ -453,6 +670,7 @@ g2 <- fviz_pca_var(music_last_top_false.pca, col.var="contrib")+
 
 g1 + g2
 ```
+
 
 
 
